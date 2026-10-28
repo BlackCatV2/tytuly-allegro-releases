@@ -1,0 +1,75 @@
+name: Build and publish Windows release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Approved source tag version, for example 0.4.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Validate version
+        run: |
+          if ($env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+$') { throw 'Expected numeric stable version.' }
+      - name: Checkout approved private source tag (read-only deploy key)
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: BlackCatV2/tytuly-allegro
+          ref: refs/tags/v${{ inputs.version }}
+          ssh-key: ${{ secrets.SOURCE_READ_KEY }}
+          persist-credentials: false
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - name: Verify version, build and test
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          [xml]$props = Get-Content Directory.Build.props
+          if ($props.Project.PropertyGroup.Version -ne $env:RELEASE_VERSION) { throw 'Tag and source version differ.' }
+          dotnet restore TytulyAllegro.slnx --locked-mode
+          dotnet build TytulyAllegro.slnx --no-restore -m:1 -p:UseSharedCompilation=false
+          dotnet run --project tests/TytulyAllegro.Tests --no-build
+          dotnet list TytulyAllegro.slnx package --vulnerable --include-transitive --format json --output-version 1 | Set-Content audit.json
+          $audit = Get-Content audit.json -Raw | ConvertFrom-Json
+          if (@($audit.projects.frameworks.topLevelPackages.vulnerabilities).Count -gt 0 -and $audit.projects.frameworks.topLevelPackages.vulnerabilities.severity -match 'High|Critical') { throw 'High or critical dependency advisory.' }
+          if (@($audit.projects.frameworks.transitivePackages.vulnerabilities).Count -gt 0 -and $audit.projects.frameworks.transitivePackages.vulnerabilities.severity -match 'High|Critical') { throw 'High or critical transitive advisory.' }
+      - name: Package Windows client only
+        run: ./scripts/Build-Release.ps1 -Version $env:RELEASE_VERSION -ClientOnly
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $releaseDir = Join-Path (Get-Location) ('outputs/'+$env:RELEASE_VERSION)
+          $names = @('TomczesciTytulyAllegro-win-Setup.exe',"TomczesciTytulyAllegro-$env:RELEASE_VERSION-full.nupkg",'releases.win.json','RELEASES')
+          $files = @($names | ForEach-Object { Join-Path $releaseDir $_ })
+          foreach ($file in $files) { if (!(Test-Path -LiteralPath $file)) { throw 'Incomplete release.' } }
+          $hashes = $files | ForEach-Object { $h=Get-FileHash -LiteralPath $_ -Algorithm SHA256; '{0}  {1}' -f $h.Hash,(Split-Path $_ -Leaf) }
+          $manifest = Join-Path $releaseDir 'SHA256SUMS.txt'
+          $hashes | Set-Content -LiteralPath $manifest
+          $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          $sha = git rev-parse HEAD
+          @("Tytuły Allegro $env:RELEASE_VERSION — Windows x64.",'','Automatyczne sprawdzanie i pobieranie aktualizacji. Instalacja po zatwierdzeniu w aplikacji.','Instalator niepodpisany. Generowanie AI wymaga tokenu i aktywnego API.','',"Source commit: $sha") | Set-Content -LiteralPath $notes
+          gh release create "v$env:RELEASE_VERSION" @files $manifest --repo $env:RELEASE_REPO --draft --title "Tytuły Allegro $env:RELEASE_VERSION" --notes-file $notes
+          gh release edit "v$env:RELEASE_VERSION" --repo $env:RELEASE_REPO --draft=false --latest
