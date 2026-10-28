@@ -4,7 +4,7 @@
 
 Aplikacja Windows do tworzenia tytułów Allegro z list zastosowań świec zapłonowych. Dostęp do generowania wymaga osobnego tokenu aplikacji. Instalator nie zawiera tokenów ani klucza OpenAI.
 
-Od wersji 0.4.0 zainstalowana aplikacja automatycznie sprawdza i pobiera nowe wydania. Instalacja wymaga kliknięcia „Zaktualizuj i uruchom ponownie”. Wersje 0.3.x i wcześniejsze wymagają jednorazowego uruchomienia nowego instalatora.
+Od wersji 0.4.1 zainstalowana aplikacja automatycznie sprawdza i pobiera nowe wydania. Instalacja wymaga kliknięcia „Zaktualizuj i uruchom ponownie”. Wersje 0.3.x i wcześniejsze wymagają jednorazowego uruchomienia nowego instalatora.
 
 Repozytorium udostępnia pakiety aplikacji. Kod źródłowy jest prywatny. Instalatory nie mają obecnie podpisu cyfrowego.
 
