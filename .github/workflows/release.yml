@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Approved source tag version, for example 0.4.0'
+        description: 'Approved source tag version, for example 0.6.0'
         required: true
         type: string
 
@@ -48,6 +48,7 @@ jobs:
           dotnet restore TytulyAllegro.slnx --locked-mode
           dotnet build TytulyAllegro.slnx --no-restore -m:1 -p:UseSharedCompilation=false
           dotnet run --project tests/TytulyAllegro.Tests --no-build
+          dotnet run --project tests/TytulyAllegro.Tests --no-build -- --verify-access-store $env:RUNNER_TEMP
           dotnet list TytulyAllegro.slnx package --vulnerable --include-transitive --format json --output-version 1 | Set-Content audit.json
           $audit = Get-Content audit.json -Raw | ConvertFrom-Json
           if (@($audit.projects.frameworks.topLevelPackages.vulnerabilities).Count -gt 0 -and $audit.projects.frameworks.topLevelPackages.vulnerabilities.severity -match 'High|Critical') { throw 'High or critical dependency advisory.' }
@@ -70,6 +71,7 @@ jobs:
           $hashes | Set-Content -LiteralPath $manifest
           $notes = Join-Path $env:RUNNER_TEMP 'release-notes.md'
           $sha = git rev-parse HEAD
-          @("Tytuły Allegro $env:RELEASE_VERSION — Windows x64.",'','Automatyczne sprawdzanie i pobieranie aktualizacji. Instalacja po zatwierdzeniu w aplikacji.','Instalator niepodpisany. Generowanie AI wymaga tokenu i aktywnego API.','',"Source commit: $sha") | Set-Content -LiteralPath $notes
+          Get-Content -LiteralPath "distribution/release-notes/$env:RELEASE_VERSION.md" -Raw | Set-Content -LiteralPath $notes
+          @('',"Source commit: $sha") | Add-Content -LiteralPath $notes
           gh release create "v$env:RELEASE_VERSION" @files $manifest --repo $env:RELEASE_REPO --draft --title "Tytuły Allegro $env:RELEASE_VERSION" --notes-file $notes
           gh release edit "v$env:RELEASE_VERSION" --repo $env:RELEASE_REPO --draft=false --latest
