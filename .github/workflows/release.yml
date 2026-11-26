@@ -63,7 +63,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           $releaseDir = Join-Path (Get-Location) ('outputs/'+$env:RELEASE_VERSION)
-          $names = @('TomczesciTytulyAllegro-win-Setup.exe',"TomczesciTytulyAllegro-$env:RELEASE_VERSION-full.nupkg",'releases.win.json','RELEASES')
+          $names = @('TomczesciTytulyAllegro-win-Setup.exe',"TomczesciTytulyAllegro-$env:RELEASE_VERSION-full.nupkg","TomczesciTytulyAllegro-$env:RELEASE_VERSION-delta.nupkg",'releases.win.json','RELEASES')
           $files = @($names | ForEach-Object { Join-Path $releaseDir $_ })
           foreach ($file in $files) { if (!(Test-Path -LiteralPath $file)) { throw 'Incomplete release.' } }
           $hashes = $files | ForEach-Object { $h=Get-FileHash -LiteralPath $_ -Algorithm SHA256; '{0}  {1}' -f $h.Hash,(Split-Path $_ -Leaf) }
